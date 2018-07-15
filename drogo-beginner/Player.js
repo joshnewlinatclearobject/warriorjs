@@ -6,26 +6,62 @@ class Player {
     return array.reduce((n, x) => n + (x === value), 0);
   }
 
+  needHealing(warrior) {
+    return !this.hurt && warrior.health() < 15;
+  }
+
+  needToFlee(warrior) {
+    return this.hurt && warrior.health() < 7;
+  }
+
+  setMapValues(warrior) {
+    var inFront = this.map.slice(this.playerLocation + 1, this.playerLocation + 6);
+    var backBehind = this.map.slice(this.playerLocation - 6, this.playerLocation - 1);
+    for (var i = 1; i < inFront.length + 1; i++) {
+      switch (this.map[this.playerLocation + i]) {
+        case 0:
+          if (this.needHealing(warrior)) {
+
+          }
+      }
+    }
+    warrior.think(inFront);
+    warrior.think(backBehind);
+  }
+
   makeAMap() {
     this.map = [];
+    this.interestMap = [];
     for (var i = 0; i < 100; i++) {
-      this.map.push(0);
+      // Fog of war is -2
+      this.map.push(-2);
+      this.interestMap.push(1);
     }
+    // player character is -1
     this.map[48] = -1;
+    this.interestMap[48] = -1;
+    // placing him in the middle of a static map
+    // (might change this eventually to be dynamic)
     this.playerLocation = 48;
   }
 
   movePlayerLocation(direction, warrior) {
     switch (direction) {
       case 'forward':
+        // move player location forward on both maps
         this.map[this.playerLocation] = 0;
+        this.interestMap[this.playerLocation] = 0;
         this.playerLocation += 1;
         this.map[this.playerLocation] = -1;
+        this.interestMap[this.playerLocation] = 1;
         break;
       case 'backward':
+        // move player location backward on both maps
         this.map[this.playerLocation] = 0;
+        this.interestMap[this.playerLocation] = 0;
         this.playerLocation -= 1;
         this.map[this.playerLocation] = -1;
+        this.interestMap[this.playerLocation] = 1;
         break;
       default:
         warrior.think("Hmm...well movePlayerLocation didn't work.");
@@ -39,7 +75,6 @@ class Player {
       if (warrior.feel().getUnit().isEnemy()) {
         adjacentArray[0] = 1;
         this.map[this.playerLocation + 1] = 1;
-        warrior.think(this.map[this.playerLocation + 1]);
       } else if (warrior.feel().getUnit().isBound()) {
         adjacentArray[0] = 2;
         this.map[this.playerLocation + 1] = 2;
@@ -67,18 +102,23 @@ class Player {
 
   playTurn(warrior) {
     var walkBackward = this.constructor.hitBackwardWall;
-    this.makeAMap();
-    var hurt = false;
-    if (this.previousTurnHealth > warrior.health()) {
-      hurt = true;
+    if (this.constructor.mapMade === 'false') {
+      this.makeAMap();
+      this.constructor.mapMade = 'true';
     }
+    this.hurt = false;
+    if (this.previousTurnHealth > warrior.health()) {
+      this.hurt = true;
+    }
+    this.setMapValues(warrior);
     var adjacentArray = this.lookAround(warrior);
-    if (!hurt && warrior.health() < 15) {
+    if (this.needHealing()) {
       warrior.rest();
-    } else if (hurt && warrior.health() < 5) {
+    } else if (this.needToFlee()) {
       if (adjacentArray.includes(0)) {
         if (adjacentArray[0] === 0) {
           warrior.walk();
+          this.movePlayerLocation('forward', warrior);
         } else if (adjacentArray[1] === 0) {
           warrior.walk('backward');
           this.movePlayerLocation('backward', warrior);
@@ -100,14 +140,21 @@ class Player {
     } else {
       if (walkBackward === 'false') {
         warrior.walk('backward');
-        this.constructor.hitBackwardWall = 'true';
         this.movePlayerLocation('backward', warrior);
+        // for some MYSTERIOUS reason, I have to set this to true or I
+        // get the error of: Cannot read property 'isEnemy' of undefined
+        this.constructor.hitBackwardWall = 'true';
       } else {
         warrior.walk();
+        this.movePlayerLocation('forward', warrior);
       }
     }
     this.previousTurnHealth = warrior.health();
-    warrior.think("\n\n\n\n" + this.map + "\n\n\n\n");
+    this.lookAround(warrior);
+    //warrior.think(this.map.slice(45, 55));
   }
 }
+// setting these as strings because booleans seem to intialize as null
+// no matter what I do!
 Player.hitBackwardWall = 'false';
+Player.mapMade = 'false';
